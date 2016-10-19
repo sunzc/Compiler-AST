@@ -3,6 +3,7 @@
 #include "Ast.h"
 #include "ParserUtil.h"
 #include "Error.h"
+#include "Type.h"
 
 using namespace std;
 
@@ -11,6 +12,7 @@ extern int yylex();
 extern void yyerror(const char *s);
 int offSet;
 extern const OpNode::OpInfo opInfo[];
+#define prt(x) cout << x << endl;
 
 %}
 
@@ -64,6 +66,10 @@ extern const OpNode::OpInfo opInfo[];
 %token TOK_TRUE TOK_FALSE TOK_IDENT
 
 /******************************** Type Info ********************************/
+%type <typeList> formal_param_list formal_param_plus 
+%type <eventEntry> event_decl_hdr event_decl
+%type <typeVal> type baseType 
+%type <cVal> TOK_IDENT TOK_PRINT 
 /* Uncomment types below as you start adding rules.
    They are commented right now to prevent compile errors.
 %type <functionEntry> function_header function_decl
@@ -128,6 +134,189 @@ extern const OpNode::OpInfo opInfo[];
 %%
 
 
-specification: /* empty */;
+specification: ifc_decl_star rule_star {}; 
+
+ifc_decl_star: /* empty */ {}
+| ifc_decl_star ifc_decl {}
+| ifc_decl_star error TOK_SEMICOLON {
+	errMsg("Syntax error, expecting a declaration");
+}
+;
+
+ifc_decl: TOK_SEMICOLON {}
+| event_decl {}
+;
+
+event_decl: event_decl_hdr TOK_LPAREN formal_param_list TOK_RPAREN TOK_SEMICOLON {
+	prt("EventDecl");
+	// call type() to pass formal_param info to event
+	Type *t = new Type($3, Type::TypeTag::EVENT);
+	$1->type(t);
+	// leave scope
+	stm.leaveScope();
+	// insert event entry
+	stm.insert($1);
+	$$ = $1;
+}
+| TOK_EVENT error TOK_SEMICOLON{
+	errMsg("Expected an event name");
+}
+;
+
+event_decl_hdr: TOK_EVENT TOK_IDENT {
+	prt("EventDecl head");
+	// create event
+	$$ = new EventEntry(string($2));
+	// enter scope, TODO what argument should we pass to it?
+	SymTabEntry *ste = new SymTabEntry(string("EVENT_BLOCK"), SymTabEntry::Kind::EVENT_BLOCK_KIND, 0, 0, ""); 
+	stm.enterScope(ste);
+}
+;
+
+formal_param_list: /* empty */ {
+	// NULL for empty list
+	$$ = 0;
+}
+| formal_param_plus{
+	prt("FormalParamList");
+	// assign $1 to $$
+	$$ = $1;
+}
+;
+
+formal_param_plus: type TOK_IDENT {
+	prt("FormalParam");
+	// First, create sym tab entry for TOK_IDENT, remember we have entered a new scope
+	VariableEntry *var = new VariableEntry(string($2), VariableEntry::VarKind::PARAM_VAR, $1);
+	stm.insert(var);
+	
+	//if $$ doesnot equal NULL, Construct it and append $1 to it
+	$$ = new vector<Type*>();
+	auto it = $$->end();
+
+	$$->insert(it, $1);
+}
+| formal_param_plus TOK_COMMA type TOK_IDENT {
+	prt("FormalParam");
+	// First, create sym tab entry for TOK_IDENT, remember we have entered a new scope
+	VariableEntry *var = new VariableEntry(string($4), VariableEntry::VarKind::PARAM_VAR, $3);
+	stm.insert(var);
+
+	// construct Type(type TOK_IDENT)
+	// if append new type to $1
+	auto it = $1->end();
+	$1->insert(it, $3);
+	$$ = $1;
+}
+;
+
+/* TODO: type name will conflict with assignment statement */
+type: TOK_IDENT {
+	prt("Type");
+	// construct type and assign
+	$$ = new Type(Type::TypeTag::UNKNOWN);
+}
+| baseType {
+	prt("Type");
+	// assign $1 to $$
+	$$ = $1;
+}
+| TOK_UNSIGNED baseType {
+	prt("Type");
+	// construct new type and assign it to $$
+	// check possible value, we only support "unsigned int" here
+	if ($2->isInt($2->tag())) {
+		$$ = new Type(Type::TypeTag::UINT);
+	}else{
+		errMsg("Unsupport type!\n");
+		$$ = new Type(Type::TypeTag::UNKNOWN);
+	}
+}
+;
+
+baseType: TOK_VOID {
+	// just construct type and assign is ok
+	$$ = new Type(Type::TypeTag::VOID);
+}
+| TOK_BOOL {
+	$$ = new Type(Type::TypeTag::BOOL);
+}
+| TOK_STRING {
+	$$ = new Type(Type::TypeTag::STRING);
+}
+| TOK_BYTE {
+	$$ = new Type(Type::TypeTag::BYTE);
+}
+| TOK_INT {
+	$$ = new Type(Type::TypeTag::INT);
+}
+| TOK_DOUBLE {
+	$$ = new Type(Type::TypeTag::DOUBLE);
+}
+;
+
+rule_star: /* empty */ {
+	errMsg("Must contain at least one rule");
+}
+| rule_list {
+}
+;
+
+rule_list: rule_decl {}
+| rule_list rule_decl {}
+| rule_list error TOK_SEMICOLON {
+	errMsg("Error, expecting a rule");
+}
+;
+
+rule_decl: event_pattern TOK_ARROW stmt {
+	prt("Rule");
+}
+| event_pattern error TOK_SEMICOLON{
+	errMsg("Syntax error, skipping event pattern");
+}
+;
+
+event_pattern: primitive_pattern{
+	prt("PrimitivePat");
+}
+;
+
+
+primitive_pattern: TOK_ANY {
+	prt("anyEvent");
+} /* TODO: should TOK_ANY be included in a computation ? */
+| TOK_IDENT TOK_LPAREN param_star TOK_RPAREN {
+	prt("NormalEvent");
+}
+;
+
+param_star: /* empty */ {}
+| param_list {}
+;
+
+param_list: TOK_IDENT {
+	prt("EventFormalParam");
+} /* TODO not sure whether empty param is allowed or not in event */ 
+| param_list TOK_COMMA TOK_IDENT {
+	prt("EventFormalParam");
+}
+;
+
+stmt_list: stmt {}
+| stmt_list stmt {}
+;
+
+stmt: TOK_SEMICOLON {} /* empty statement */
+| compound_stmt {} 
+| error TOK_SEMICOLON{
+	errMsg("Syntax error while parsing a statement");
+}
+;
+
+compound_stmt: TOK_LBRACE stmt_list TOK_RBRACE TOK_SEMICOLON{
+	prt("CompoundStmt");
+}
+;
 
 %%

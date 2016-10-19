@@ -10,4 +10,10 @@ void GlobalEntry::print(ostream& out, int indent) const
 void EventEntry::print(ostream& out, int indent) const
 {
 	// Add your code
+	out << type()->fullName() <<endl;
+}
+
+void VariableEntry::print(ostream& out, int indent) const
+{
+	// Add your code
 }
