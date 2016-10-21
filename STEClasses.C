@@ -105,3 +105,39 @@ void PatNode::print(ostream& os, int indent) const{
 void ValueNode::print(ostream& os, int indent) const{
 	// Add your code
 }
+
+RefExprNode::RefExprNode(string ext, const SymTabEntry* ste,
+	      int line, int column, string file):
+	ExprNode(ExprNode::ExprNodeType::REF_EXPR_NODE, NULL, line, column, file){
+	// TODO
+	ext_ = ext;
+	sym_ = ste;
+}
+
+void RefExprNode::print(ostream& os, int indent) const{
+	// Add your code
+}
+
+// TODO don't know what kind of copy here it is, should we copy ext_???
+RefExprNode::RefExprNode(const RefExprNode& ren):
+	ExprNode(ExprNode::ExprNodeType::REF_EXPR_NODE){
+	ext_ = ren.ext();
+	sym_ = ren.symTabEntry();
+}
+
+InvocationNode::InvocationNode(const SymTabEntry *ste, vector<ExprNode*>* param,
+		 int line, int column, string file):
+	ExprNode(ExprNode::ExprNodeType::INV_NODE) {
+	ste_ = ste;
+	params_ = param;
+}
+
+InvocationNode::InvocationNode(const InvocationNode& in):
+	ExprNode(ExprNode::ExprNodeType::INV_NODE) {
+	ste_ = in.symTabEntry();
+	params_ = (vector <ExprNode*> *)in.params();
+}
+
+void InvocationNode::print(ostream& os, int indent) const{
+	// Add your code
+}
