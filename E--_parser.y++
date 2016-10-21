@@ -46,6 +46,7 @@ extern const OpNode::OpInfo opInfo[];
   vector<RuleNode*>* transList;
   
   vector<Type*>*     formalTypeVal;
+  vector<string>*    paramVal;
   const OpNode::OpInfo*    funIval;
 };
 
@@ -66,10 +67,19 @@ extern const OpNode::OpInfo opInfo[];
 %token TOK_TRUE TOK_FALSE TOK_IDENT
 
 /******************************** Type Info ********************************/
-%type <typeList> formal_param_list formal_param_plus 
+%type <typeList> formal_param_list formal_param_plus
 %type <eventEntry> event_decl_hdr event_decl
-%type <typeVal> type baseType 
-%type <cVal> TOK_IDENT TOK_PRINT 
+%type <typeVal> type baseType
+%type <cVal> TOK_IDENT TOK_PRINT
+%type <primPatVal> event primitive_pat
+%type <patVal> event_pattern rule_body1
+%type <ruleNode> rule
+%type <paramVal> param_list param_plus
+%type <exprVal> expr function_invocation asg_stmt
+%type <valVal> literal
+%type <uVal> TOK_UINTNUM
+%type <dVal> TOK_DOUBLENUM
+%type <cVal> TOK_STRCONST
 /* Uncomment types below as you start adding rules.
    They are commented right now to prevent compile errors.
 %type <functionEntry> function_header function_decl
@@ -168,14 +178,14 @@ event_decl_hdr: TOK_EVENT TOK_IDENT {
 	// create event
 	$$ = new EventEntry(string($2));
 	// enter scope, TODO what argument should we pass to it?
-	SymTabEntry *ste = new SymTabEntry(string("EVENT_BLOCK"), SymTabEntry::Kind::EVENT_BLOCK_KIND, 0, 0, ""); 
+	SymTabEntry *ste = new SymTabEntry(string("EVENT"), SymTabEntry::Kind::EVENT_KIND, 0, 0, "");
 	stm.enterScope(ste);
 }
 ;
 
 formal_param_list: /* empty */ {
 	// NULL for empty list
-	$$ = 0;
+	$$ = nullptr;
 }
 | formal_param_plus{
 	prt("FormalParamList");
@@ -262,43 +272,253 @@ rule_star: /* empty */ {
 }
 ;
 
-rule_list: rule_decl {}
-| rule_list rule_decl {}
+rule_list: rule{
+	// make sure we are at global scope and add rule to GlobalEntry
+	SymTabEntry *ste = stm.currentScope();
+	if (ste->kind() == SymTabEntry::Kind::GLOBAL_KIND) {
+		((GlobalEntry *)ste)->addRule($1);
+	} else {
+		// ERROR happens!
+		// TODO
+		errMsg("Error, suppose to be at global scope!");
+	}
+}
+| rule_list rule{
+	SymTabEntry *ste = stm.currentScope();
+	if (ste->kind() == SymTabEntry::Kind::GLOBAL_KIND) {
+		((GlobalEntry *)ste)->addRule($2);
+	} else {
+		// ERROR happens!
+		// TODO
+		errMsg("Error, suppose to be at global scope!");
+	}
+
+}
 | rule_list error TOK_SEMICOLON {
 	errMsg("Error, expecting a rule");
 }
 ;
 
-rule_decl: event_pattern TOK_ARROW stmt {
+rule: rule_body1 TOK_ARROW stmt {
 	prt("Rule");
 }
-| event_pattern error TOK_SEMICOLON{
+| rule_body1 error TOK_SEMICOLON{
 	errMsg("Syntax error, skipping event pattern");
 }
 ;
 
-event_pattern: primitive_pattern{
-	prt("PrimitivePat");
+rule_body1: event_pattern {}
+;
+
+event_pattern: event{
+	// construct PrimitivePatNode without expr
+
+	// to decide when to enter the rule scope, we should find the first event in the rule
+	// to find the first rule, we should check whether we are at global scope when we see the event
+	SymTabEntry *ste = stm.currentScope();
+	vector<VariableEntry *> *ve_list;
+	std::vector<VariableEntry *>::iterator it;
+	if (ste->kind() == SymTabEntry::Kind::GLOBAL_KIND) {
+		// we enter scope and add the variable entry in event param_list into the new scope
+		SymTabEntry *scope_ste = new SymTabEntry(string("RULE"), SymTabEntry::Kind::RULE_KIND, 0, 0, "");
+		stm.enterScope(scope_ste);
+		ve_list = $1->params();
+		for(it = ve_list->begin(); it != ve_list->end(); it++) {
+			stm.insert(*it);
+		}
+	} else {
+		// seems we have already entered the rule scope, so just add variable entry in the event param_list into the new scope
+		ve_list = $1->params();
+		for(it = ve_list->begin(); it != ve_list->end(); it++) {
+			stm.insert(*it);
+		}
+	}
+
+	$$ = (BasePatNode *)$1;
+}
+| primitive_pat {
+	// to decide when to enter the rule scope, we should find the first event in the rule
+	// to find the first rule, we should check whether we are at global scope when we see the event
+	SymTabEntry *ste = stm.currentScope();
+	vector<VariableEntry *> *ve_list;
+	std::vector<VariableEntry *>::iterator it;
+	if (ste->kind() == SymTabEntry::Kind::GLOBAL_KIND) {
+		// we enter scope and add the variable entry in event param_list into the new scope
+		SymTabEntry *scope_ste = new SymTabEntry(string("RULE"), SymTabEntry::Kind::RULE_KIND, 0, 0, "");
+		stm.enterScope(scope_ste);
+		ve_list = $1->params();
+		for(it = ve_list->begin(); it != ve_list->end(); it++) {
+			stm.insert(*it);
+		}
+	} else {
+		// seems we have already entered the rule scope, so just add variable entry in the event param_list into the new scope
+		ve_list = $1->params();
+		for(it = ve_list->begin(); it != ve_list->end(); it++) {
+			stm.insert(*it);
+		}
+	}
+
+	$$ = (BasePatNode *)$1;
+}
+| event_pattern TOK_PAT_OR event_pattern {
+	$$ = (BasePatNode *)(new PatNode(BasePatNode::PatNodeKind::OR, $1, $3));
+}
+| event_pattern TOK_COLON event_pattern {
+	$$ = (BasePatNode *)(new PatNode(BasePatNode::PatNodeKind::SEQ, $1, $3));
+}
+| event_pattern TOK_PAT_STAR {
+	$$ = (BasePatNode *)(new PatNode(BasePatNode::PatNodeKind::STAR, $1));
+}
+| TOK_NOT event_pattern %prec TOK_PAT_NOT {
+	$$ = (BasePatNode *)(new PatNode(BasePatNode::PatNodeKind::NEG, $2));
+}
+| TOK_LPAREN event_pattern TOK_RPAREN {
+	$$ = $2;
 }
 ;
 
-
-primitive_pattern: TOK_ANY {
-	prt("anyEvent");
-} /* TODO: should TOK_ANY be included in a computation ? */
-| TOK_IDENT TOK_LPAREN param_star TOK_RPAREN {
-	prt("NormalEvent");
+primitive_pat: event TOK_BITOR expr {
+	$1->cond($3);
+	$$ = $1;
 }
 ;
 
-param_star: /* empty */ {}
-| param_list {}
+event: TOK_ANY {
+	// for 'any' event, we don't need to lookup global scope for its definition
+	EventEntry *ee = new EventEntry(string("any"));
+	$$ = new PrimitivePatNode(ee, nullptr);
+}
+| TOK_IDENT TOK_LPAREN param_list TOK_RPAREN {
+	// look up this event name in global scope, check whether it has been defined
+	SymTabEntry *ste = stm.lookUpInScope(string($1), SymTabEntry::Kind::GLOBAL_KIND);
+	vector<VariableEntry*> *ve_list = new vector<VariableEntry*> ();
+	std::vector<VariableEntry*>::iterator it_vel;
+	VariableEntry *ve;
+	Type *t;
+	vector<Type*> * argTypes;
+	vector<string> * param_list = $3;
+	bool ok = false;
+
+	if (ste == NULL) {
+		// TODO handle name undefined error here!
+		errMsg("ERROR: undefined event!");
+	} else {
+		t = ste->type();
+		if (t->tag() != Type::TypeTag::EVENT) {
+			// TODO handle name not match error here!
+			errMsg("ERROR: name not match, expect an event definition!");
+		} else {
+			// construct
+			argTypes = t->argTypes();
+			if (argTypes->size() != param_list->size()) {
+				// TODO handle parameters not match error here!
+				errMsg("ERROR: parameters length not match!");
+			} else {
+				// construct variable entry from param_list, combined with the type info from event
+				std::vector<string>::iterator it_s = param_list->begin();
+				for(std::vector<Type*>::iterator it = argTypes->begin(); it != argTypes->end(); it++, it_s++) {
+					ve = new VariableEntry(*it_s, VariableEntry::VarKind::PARAM_VAR, *it);
+					it_vel = ve_list->end();
+					ve_list->insert(it_vel, ve);
+				}
+				ok = true;
+			}
+		}
+	}
+
+	if (ok) {
+		$$ = new PrimitivePatNode((EventEntry *)ste, ve_list);
+	} else {
+		$$ = nullptr;
+	}
+}
 ;
 
-param_list: TOK_IDENT {
+expr: literal {
+	prt("Literal");
+	$$ = new ValueNode($1);
+}
+| ref_expr{
+
+}
+| asg_stmt{}
+| function_invocation {}
+| TOK_MINUS expr %prec TOK_UMINUS{}
+| TOK_NOT expr{}
+| TOK_BITNOT expr{}
+| expr TOK_MINUS expr {}
+| expr TOK_PLUS expr {}
+| expr TOK_MULT expr {}
+| expr TOK_DIV expr {}
+| expr TOK_MOD expr {}
+| expr TOK_AND expr {}
+| expr TOK_OR expr {}
+| expr TOK_GT expr {}
+| expr TOK_LT expr {}
+| expr TOK_EQ expr {}
+| expr TOK_NE expr {}
+| expr TOK_GE expr {}
+| expr TOK_LE expr {}
+| expr TOK_BITXOR expr {}
+| expr TOK_BITAND expr {}
+| expr TOK_BITOR expr {}
+| expr TOK_SHL expr {}
+| expr TOK_SHR expr {}
+| TOK_LPAREN expr TOK_RPAREN {}
+;
+
+ref_expr: TOK_IDENT {
+	prt("RefExpr");
+}
+;
+
+asg_stmt: ref_expr TOK_ASSIGN expr {
+	prt("Assignment");
+}
+| ref_expr TOK_ASSIGN error TOK_SEMICOLON {
+	errMsg("Syntax error in assignment");
+	yyerrok;
+}
+;
+
+function_invocation: TOK_IDENT TOK_LPAREN expr_list TOK_RPAREN {
+	prt("FunctionInvocation");
+}
+;
+
+expr_list: /* empty */ {}
+| expr_plus{}
+;
+
+expr_plus: expr {}
+| expr_plus TOK_COMMA expr {}
+;
+
+literal: TOK_STRCONST {
+	$$ = new Value($1);
+}
+| TOK_UINTNUM {
+	$$ = new Value($1, Type::TypeTag::UNSIGNED);
+}
+| TOK_DOUBLENUM {
+	$$ = new Value($1);
+}
+| TOK_TRUE {
+	$$ = new Value(true);
+}
+| TOK_FALSE {
+	$$ = new Value(false);
+}
+;
+
+param_list: /* empty */ {}
+| param_plus {}
+;
+
+param_plus: TOK_IDENT {
 	prt("EventFormalParam");
 } /* TODO not sure whether empty param is allowed or not in event */ 
-| param_list TOK_COMMA TOK_IDENT {
+| param_plus TOK_COMMA TOK_IDENT {
 	prt("EventFormalParam");
 }
 ;

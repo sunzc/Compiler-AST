@@ -142,9 +142,10 @@ union YYSTYPE
   vector<RuleNode*>* transList;
   
   vector<Type*>*     formalTypeVal;
+  vector<string>*    paramVal;
   const OpNode::OpInfo*    funIval;
 
-#line 148 "E--_parser.H" /* yacc.c:1909  */
+#line 149 "E--_parser.H" /* yacc.c:1909  */
 };
 
 typedef union YYSTYPE YYSTYPE;

@@ -1,5 +1,5 @@
-CXX=g++
-#CXX=clang++
+#CXX=g++
+CXX=clang++
 CXXFLAGS = -g -O -Wno-deprecated -std=c++0x -Wall
 FLEX = flex
 BISON = bison

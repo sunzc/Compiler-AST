@@ -235,7 +235,7 @@ class InvocationNode: public ExprNode {
   const ExprNode* param(unsigned int i) const 
     { return (params_ != NULL && i < params_->size())? (const ExprNode*)((*params_)[i]) : NULL; };
   ExprNode* param(unsigned int i)
-    { return (ExprNode*)((const InvocationNode*)this->param(i));}
+    { return (ExprNode*)(((const InvocationNode*)this)->param(i));}
   void param(ExprNode* arg, unsigned int i) 
     { if (params_ != NULL && i < params_->size()) (*params_)[i] = arg;};
 
