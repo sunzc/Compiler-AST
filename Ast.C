@@ -209,6 +209,26 @@ bool PrimitivePatNode::hasAnyOrOther() const{
 
 void PrimitivePatNode::print(ostream& os, int indent) const{
 	// Add your code
+	os << "(";
+	cout << this->event()->name();
+	os << "(";
+		if (this->params() != NULL) {
+			auto it = this->params()->begin();
+			for(;it != this->params()->end(); ++it) {
+				(*it)->print(os, 0);
+				if ((*it)->next() != NULL)
+					os<<", ";
+			}
+		}
+	os << ")";
+
+	if (this->cond() != NULL) {
+		os << " | ";
+		this->cond()->print(os, indent);
+	}
+
+	os << ")";
+
 }
 
 PatNode::PatNode(PatNodeKind pk, BasePatNode *p1, BasePatNode *p2, int line, int column, string file):
@@ -262,10 +282,36 @@ bool PatNode::hasAnyOrOther() const{
 
 void PatNode::print(ostream& os, int indent) const{
 	// Add your code
+	os << "(";
+	switch(this->kind()) {
+		case BasePatNode::PatNodeKind::NEG :
+			os << "!";
+			this->pat1()->print(os, indent);
+			break;
+		case BasePatNode::PatNodeKind::STAR :
+			this->pat1()->print(os, indent);
+			os << " **";
+			break;
+		case BasePatNode::PatNodeKind::OR :
+			this->pat1()->print(os, indent);
+			os << " \\/ ";
+			this->pat2()->print(os, indent);
+			break;
+		case BasePatNode::PatNodeKind::SEQ :
+			this->pat1()->print(os, indent);
+			os << " : ";
+			this->pat2()->print(os, indent);
+			break;
+		default:
+			os << "ERROR: undefined PatNodeKind for PatNode"<<endl;
+			break;
+	}
+	os << ")";
 }
 
 void ValueNode::print(ostream& os, int indent) const{
 	// Add your code
+	this->value()->print(os, indent);
 }
 
 RefExprNode::RefExprNode(string ext, const SymTabEntry* ste,
@@ -278,6 +324,9 @@ RefExprNode::RefExprNode(string ext, const SymTabEntry* ste,
 
 void RefExprNode::print(ostream& os, int indent) const{
 	// Add your code
+	os << "(";
+	os << this->ext();
+	os << ")";
 }
 
 // TODO don't know what kind of copy here it is, should we copy ext_???
@@ -302,6 +351,17 @@ InvocationNode::InvocationNode(const InvocationNode& in):
 
 void InvocationNode::print(ostream& os, int indent) const{
 	// Add your code
+	os << this->symTabEntry()->name();
+	os << "(";
+	if (this->params() != NULL) {
+		auto it = this->params()->begin();
+		for(;it != this->params()->end(); ++it) {
+			(*it)->print(os, 0);
+			if ((it + 1) != this->params()->end())
+				os<<", ";
+		}
+	}
+	os << ")";
 }
 
 IfNode::IfNode(ExprNode* cond, StmtNode* thenStmt, 
@@ -314,6 +374,28 @@ IfNode::IfNode(ExprNode* cond, StmtNode* thenStmt,
 
 void IfNode::print(ostream& os, int indent) const{
 	// Add your code
+	prtSpace(os, indent);
+	os << "if";
+	os << "(";
+	this->cond()->print(os, indent);
+	os << ")";
+	if (this->thenStmt()->stmtNodeKind() != StmtNode::StmtNodeKind::COMPOUND) {
+		os << endl;
+		prtSpace(os, indent + 2);
+		this->thenStmt()->print(os, indent + 2);
+		if (this->thenStmt()->stmtNodeKind() != StmtNode::StmtNodeKind::IF) {
+			os << ";";
+			os << endl;
+		}
+	} else {
+		os << step;
+		os << "{";
+		os << endl; 
+		((CompoundStmtNode *)(this->thenStmt()))->printWithoutBraces(os, indent + 2);
+		prtSpace(os, indent);
+		os << "}";
+		os << endl; 
+	}
 }
 
 RuleNode::RuleNode(BlockEntry *re, BasePatNode* pat, StmtNode* reaction, 
@@ -326,11 +408,48 @@ RuleNode::RuleNode(BlockEntry *re, BasePatNode* pat, StmtNode* reaction,
 
 void RuleNode::print(ostream& os, int indent) const{
 	// Add your code
+	prtSpace(os, indent);
+	this->pat()->print(os, indent);
+	os << "-> ";
+	this->reaction()->print(os, indent);
+	prtSpace(os, indent);
+	os << ";;" << endl;
 }
 
 void  CompoundStmtNode::printWithoutBraces(ostream& os, int indent) const{
 	// Add your code
+	if (this->stmts() != NULL) {
+		auto it = this->stmts()->begin();
+		for (; it != this->stmts()->end(); ++it) {
+			if (((*it)->stmtNodeKind() != StmtNode::StmtNodeKind::COMPOUND) ||
+				((*it)->stmtNodeKind() != StmtNode::StmtNodeKind::IF)) {
+				prtSpace(os, indent);
+				(*it)->print(os, indent);
+				os << ";" << endl;
+			} else
+				(*it)->print(os, indent);
+		}
+	}
 }
+
 void  CompoundStmtNode::print(ostream& os, int indent) const{
 	// Add your code
+	if (this->stmts()->size() > 0) {
+		prtSpace(os, indent);
+		os << "{" << endl;
+		auto it = this->stmts()->begin();
+		for (; it != this->stmts()->end(); ++it) {
+			if (((*it)->stmtNodeKind() != StmtNode::StmtNodeKind::COMPOUND) ||
+				((*it)->stmtNodeKind() != StmtNode::StmtNodeKind::IF)) {
+				prtSpace(os, indent + 2);
+				(*it)->print(os, indent + 2);
+				os << ";" << endl;
+			} else
+				(*it)->print(os, indent + 2);
+		}
+		prtSpace(os, indent);
+		os << "};" << endl;
+	} else {
+		os << "{};" << endl;
+	}
 }

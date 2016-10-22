@@ -10,7 +10,23 @@ void GlobalEntry::print(ostream& out, int indent) const
 void EventEntry::print(ostream& out, int indent) const
 {
 	// Add your code
-	out << type()->fullName() <<endl;
+	// out << type()->fullName() <<endl;
+	prtSpace(out, indent);
+	out << "event";
+	out << step;
+	out << this->name();
+	out << "(";
+	if (this->symTab() != NULL) {
+		auto it = this->symTab()->begin();
+		for(; it != this->symTab()->end(); ++it) {
+			(*it)->print(out, 0);
+			if ((*it)->next() != NULL)
+				out<<", ";
+		}
+	}
+	out << ")";
+	out << ";";
+	out <<endl;
 }
 
 VariableEntry::VariableEntry(const VariableEntry &v):
@@ -22,6 +38,9 @@ VariableEntry::VariableEntry(const VariableEntry &v):
 void VariableEntry::print(ostream& out, int indent) const
 {
 	// Add your code
+	this->type()->print(out, indent);
+	out<<step;
+	out<<this->name();
 }
 
 void BlockEntry::print(ostream& os, int indent) const{

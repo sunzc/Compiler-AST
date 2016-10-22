@@ -167,7 +167,9 @@ ifc_decl_star: /* empty */ {}
 ;
 
 ifc_decl: TOK_SEMICOLON {}
-| event_decl {}
+| event_decl {
+	$1->print(cout, 0);
+}
 | class_decl {}
 | variable_decl {}
 | function_decl {}
@@ -469,6 +471,8 @@ rule_list: rule{
 		// TODO
 		errMsg("Error, suppose to be at global scope!");
 	}
+
+	$1->print(cout, 0);
 }
 | rule_list rule{
 	SymTabEntry *ste = stm.currentScope();
@@ -480,6 +484,7 @@ rule_list: rule{
 		errMsg("Error, suppose to be at global scope!");
 	}
 
+	$2->print(cout, 0);
 }
 | rule_list error TOK_SEMICOLON {
 	errMsg("Error, expecting a rule");
@@ -810,7 +815,8 @@ stmt_plus: stmt {
 	$$ = new list<StmtNode*> ();
 	auto it = $$->end();
 
-	$$->insert(it, $1);
+	if ($1 != nullptr)
+		$$->insert(it, $1);
 }
 | stmt_plus stmt {
 	auto it = $1->end();
@@ -822,7 +828,8 @@ stmt_plus: stmt {
 
 stmt: TOK_SEMICOLON {
 	// TODO so far we don't have definition for empty stmt, use illeagal instead.
-	$$ = new ExprStmtNode(nullptr);
+	//$$ = new ExprStmtNode(nullptr);
+	$$ = nullptr;
 } /* empty statement */
 | asg_stmt TOK_SEMICOLON {
 	$$ = new ExprStmtNode($1);
