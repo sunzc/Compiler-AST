@@ -75,13 +75,18 @@ extern const OpNode::OpInfo opInfo[];
 %type <patVal> event_pattern rule_body1
 %type <ruleNode> rule
 %type <paramVal> param_list param_plus
-%type <exprVal> expr function_invocation asg_stmt
+%type <exprVal> expr function_invocation asg_stmt lp_expr_rp
 %type <valVal> literal
 %type <uVal> TOK_UINTNUM
 %type <dVal> TOK_DOUBLENUM
 %type <cVal> TOK_STRCONST
 %type <refexpVal> ref_expr
 %type <exprList> expr_list expr_plus
+%type <ifVal>  if_then_else_stmt 
+%type <stmtList> stmt_plus
+%type <stmtVal> stmt
+%type <compoundStmtVal> compoundStmt
+
 /* Uncomment types below as you start adding rules.
    They are commented right now to prevent compile errors.
 %type <functionEntry> function_header function_decl
@@ -303,13 +308,21 @@ rule_list: rule{
 
 rule: rule_body1 TOK_ARROW stmt {
 	prt("Rule");
+	// we can leave scope now
+	stm.leaveScope();
+	RuleBlockEntry *rbe = new RuleBlockEntry();
+	stm.insert(rbe);
+
+	$$ = new RuleNode(rbe, $1, $3);
 }
 | rule_body1 error TOK_SEMICOLON{
 	errMsg("Syntax error, skipping event pattern");
 }
 ;
 
-rule_body1: event_pattern {}
+rule_body1: event_pattern {
+	$$ = $1;
+}
 ;
 
 event_pattern: event{
@@ -613,19 +626,75 @@ param_plus: TOK_IDENT {
 }
 ;
 
-stmt_list: stmt {}
-| stmt_list stmt {}
+stmt_plus: stmt {
+	$$ = new list<StmtNode*> ();
+	auto it = $$->end();
+
+	$$->insert(it, $1);
+}
+| stmt_plus stmt {
+	auto it = $1->end();
+	$1->insert(it, $2);
+
+	$$ = $1;
+}
 ;
 
-stmt: TOK_SEMICOLON {} /* empty statement */
-| compound_stmt {} 
+stmt: TOK_SEMICOLON {
+	// TODO so far we don't have definition for empty stmt, use illeagal instead.
+	$$ = new ExprStmtNode(nullptr);
+} /* empty statement */
+| asg_stmt TOK_SEMICOLON {
+	$$ = new ExprStmtNode($1);
+}
+| TOK_RETURN expr TOK_SEMICOLON {
+	// check whether we are in function scope now, and get function entry
+	// TODO we can't get function entry here, it may not exists in global scope yet
+	// we may need to use global variable to record current function!!
+	SymTabEntry *ste = stm.currentScope();
+	if (ste->kind() == SymTabEntry::Kind::FUNCTION_KIND) {
+		$$ = new ReturnStmtNode($2, nullptr);
+	} else {
+		// TODO handle ret not in function scope error!
+		errMsg("ERROR: ret not in function scope!");
+	}
+}
+| function_invocation TOK_SEMICOLON {
+	$$ = new ExprStmtNode($1);
+}
+| if_then_else_stmt {
+	$$ = $1;
+}
+| compoundStmt {
+	$$ = $1;
+} 
 | error TOK_SEMICOLON{
 	errMsg("Syntax error while parsing a statement");
 }
 ;
 
-compound_stmt: TOK_LBRACE stmt_list TOK_RBRACE TOK_SEMICOLON{
+if_then_else_stmt: TOK_IF lp_expr_rp stmt { /* TODO : first conflict */
+	prt("IfThenStmt");
+	$$ = new IfNode($2, $3);
+}
+| TOK_IF lp_expr_rp stmt TOK_ELSE stmt {
+	prt("IfThenElseStmt");
+	$$ = new IfNode($2, $3, $5);
+}
+| TOK_IF lp_expr_rp stmt TOK_ELSE error{
+	errMsg("Syntax error while parsing a statement");
+}
+;
+
+lp_expr_rp: TOK_LPAREN expr TOK_RPAREN {
+	prt("(Expr)");
+	$$ = $2;
+}
+;
+
+compoundStmt: TOK_LBRACE stmt_plus TOK_RBRACE TOK_SEMICOLON{
 	prt("CompoundStmt");
+	$$ = new CompoundStmtNode($2);
 }
 ;
 

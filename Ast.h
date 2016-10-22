@@ -16,7 +16,7 @@ class OpNode;
 class PatNode;
 //enum class PatNode;
 class PrimitivePatNode;
-class RulezNode;
+class RuleNode;
 class SymTabEntry;
 class VariableEntry;
 
