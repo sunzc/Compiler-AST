@@ -29,7 +29,7 @@ extern const OpNode::OpInfo opInfo[];
 
   ClassEntry*        classEntry;
   Type*              typeVal;
-  vector<Type*>*     typeList; 
+  vector<Type*>*     typeList;
 
   EventEntry*        eventEntry;                        
   VariableEntry*     variableEntry;
@@ -180,6 +180,19 @@ function_decl: function_header TOK_LPAREN formal_param_list TOK_RPAREN TOK_SEMIC
 	Type *ft = new Type($3, rt);
 	$1->type(ft);
 
+	// copy formal parameters to event_entry
+	int p_num = ft->arity();
+	SymTabEntry *ste = stm.currentScope();
+	if (ste->symTab() != NULL) {
+		auto it = ste->symTab()->begin();
+		for(; p_num > 0; ++it,p_num--) {
+			// we only copy variable entry
+			assert((*it)->kind() == SymTabEntry::Kind::VARIABLE_KIND);
+			VariableEntry *ve = new VariableEntry(*((VariableEntry *)(*it)));
+			$1->insert(ve);
+		}
+	}
+
 	$$ = $1;
 	stm.insert($$);
 }
@@ -190,6 +203,19 @@ function_decl: function_header TOK_LPAREN formal_param_list TOK_RPAREN TOK_SEMIC
 	$1->type(ft);
 	$1->body($5);
 
+	// copy formal parameters to event_entry
+	int p_num = ft->arity();
+	SymTabEntry *ste = stm.currentScope();
+	if (ste->symTab() != NULL) {
+		auto it = ste->symTab()->begin();
+		for(;p_num > 0;++it,p_num--) {
+			// we only copy variable entry
+			assert((*it)->kind() == SymTabEntry::Kind::VARIABLE_KIND);
+			VariableEntry *ve = new VariableEntry(*((VariableEntry *)(*it)));
+			$1->insert(ve);
+		}
+	}
+
 	$$ = $1;
 	stm.insert($$);
 }
@@ -199,6 +225,19 @@ function_decl: function_header TOK_LPAREN formal_param_list TOK_RPAREN TOK_SEMIC
 	Type *ft = new Type($3, rt);
 	$1->type(ft);
 	$1->body($5);
+
+	// copy formal parameters to event_entry
+	int p_num = ft->arity();
+	SymTabEntry *ste = stm.currentScope();
+	if (ste->symTab() != NULL) {
+		auto it = ste->symTab()->begin();
+		for(; p_num > 0; ++it,p_num--) {
+			// we only copy variable entry
+			assert((*it)->kind() == SymTabEntry::Kind::VARIABLE_KIND);
+			VariableEntry *ve = new VariableEntry(*((VariableEntry *)(*it)));
+			$1->insert(ve);
+		}
+	}
 
 	$$ = $1;
 	stm.insert($$);
@@ -296,6 +335,20 @@ event_decl: event_decl_hdr TOK_LPAREN formal_param_list TOK_RPAREN TOK_SEMICOLON
 	// call type() to pass formal_param info to event
 	Type *t = new Type($3, Type::TypeTag::EVENT);
 	$1->type(t);
+
+	// copy formal parameters to event_entry
+	int p_num = t->arity();
+	SymTabEntry *ste = stm.currentScope();
+	if (ste->symTab() != NULL) {
+		auto it = ste->symTab()->begin();
+		for(; p_num > 0; ++it, p_num--) {
+			// we only copy variable entry
+			assert((*it)->kind() == SymTabEntry::Kind::VARIABLE_KIND);
+			VariableEntry *ve = new VariableEntry(*((VariableEntry *)(*it)));
+			$1->insert(ve);
+		}
+	}
+
 	// leave scope
 	stm.leaveScope();
 	// insert event entry

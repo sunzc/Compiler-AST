@@ -13,6 +13,12 @@ void EventEntry::print(ostream& out, int indent) const
 	out << type()->fullName() <<endl;
 }
 
+VariableEntry::VariableEntry(const VariableEntry &v):
+    SymTabEntry(*(new string(v.name())), SymTabEntry::Kind::VARIABLE_KIND, v.line(), v.column(), v.file(), (Type *)v.type()) {
+	vkind_ = v.varKind();
+	initVal_ = (ExprNode *)v.initVal();
+}
+
 void VariableEntry::print(ostream& out, int indent) const
 {
 	// Add your code

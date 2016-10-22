@@ -125,7 +125,7 @@ union YYSTYPE
 
   ClassEntry*        classEntry;
   Type*              typeVal;
-  vector<Type*>*     typeList; 
+  vector<Type*>*     typeList;
 
   EventEntry*        eventEntry;                        
   VariableEntry*     variableEntry;
