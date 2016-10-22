@@ -34,6 +34,7 @@ extern const OpNode::OpInfo opInfo[];
   EventEntry*        eventEntry;                        
   VariableEntry*     variableEntry;
   FunctionEntry*     functionEntry;
+  vector<VariableEntry*>* varEntryList;
 
   BasePatNode*       patVal;
   PrimitivePatNode*  primPatVal;
@@ -67,6 +68,10 @@ extern const OpNode::OpInfo opInfo[];
 %token TOK_TRUE TOK_FALSE TOK_IDENT
 
 /******************************** Type Info ********************************/
+
+%type <functionEntry> function_header function_decl
+%type <varEntryList> var_list
+%type <variableEntry> variable_decl var_name
 %type <typeList> formal_param_list formal_param_plus
 %type <eventEntry> event_decl_hdr event_decl
 %type <typeVal> type baseType
@@ -85,7 +90,8 @@ extern const OpNode::OpInfo opInfo[];
 %type <ifVal>  if_then_else_stmt 
 %type <stmtList> stmt_plus
 %type <stmtVal> stmt
-%type <compoundStmtVal> compoundStmt
+%type <compoundStmtVal> compoundStmt fun_rest
+%type <classEntry> class_decl
 
 /* Uncomment types below as you start adding rules.
    They are commented right now to prevent compile errors.
@@ -162,6 +168,127 @@ ifc_decl_star: /* empty */ {}
 
 ifc_decl: TOK_SEMICOLON {}
 | event_decl {}
+| class_decl {}
+| variable_decl {}
+| function_decl {}
+;
+
+/* TODO: function with a body, but with ending semicolon */
+function_decl: function_header TOK_LPAREN formal_param_list TOK_RPAREN TOK_SEMICOLON {
+	// use $1->type_ keep return type info
+	Type *rt = $1->type();
+	Type *ft = new Type($3, rt);
+	$1->type(ft);
+
+	$$ = $1;
+	stm.insert($$);
+}
+| function_header TOK_LPAREN formal_param_list TOK_RPAREN fun_rest{
+	// use $1->type_ keep return type info
+	Type *rt = $1->type();
+	Type *ft = new Type($3, rt);
+	$1->type(ft);
+	$1->body($5);
+
+	$$ = $1;
+	stm.insert($$);
+}
+| function_header TOK_LPAREN formal_param_list TOK_RPAREN fun_rest TOK_SEMICOLON{
+	// use $1->type_ keep return type info
+	Type *rt = $1->type();
+	Type *ft = new Type($3, rt);
+	$1->type(ft);
+	$1->body($5);
+
+	$$ = $1;
+	stm.insert($$);
+}
+;
+
+function_header: type TOK_IDENT {
+	// create function entry
+	$$ = new FunctionEntry(string($2));
+	$$->type($1);
+	// enter scope, TODO what argument should we pass to it?
+	SymTabEntry *ste = new SymTabEntry(string("FUNCTION"), SymTabEntry::Kind::FUNCTION_KIND, 0, 0, "");
+	stm.enterScope(ste);
+} /* function without a body */
+| type error TOK_RPAREN{
+	errMsg("Expecting a function declaration -- may be a missing function name");
+}
+;
+
+fun_rest: TOK_LBRACE var_decl_star stmt_plus TOK_RBRACE {
+	prt("FunctionBody");
+	$$ = new CompoundStmtNode($3);
+} /* TODO: let's suppose variable declarations should comes before statements */
+| TOK_LBRACE var_decl_star error TOK_RBRACE {
+	errMsg("Syntax error, expecting a function declaration");
+}
+;
+
+var_decl_star: /* empty */ {}
+| var_decl_star variable_decl {}
+;
+
+variable_decl: type var_list TOK_SEMICOLON {
+	// assign type to var_list and insert them into current scope
+	auto it = $2->begin();
+	for(; it!= $2->end(); it++) {
+		(*it)->type($1);
+		stm.insert(*it);
+	}
+}
+| type error TOK_SEMICOLON {
+	errMsg("Error in variable declaration, may be a missing identifier");
+}
+;
+
+var_list: var_name {
+	$$ = new vector<VariableEntry*> ();
+	auto it = $$->end();
+
+	$$->insert(it, $1);
+}
+| var_list TOK_COMMA var_name {
+	auto it = $1->end();
+	$1->insert(it, $3);
+
+	$$ = $1;
+}
+;
+
+var_name: TOK_IDENT {
+	prt("VariableDecl");
+	// check whether we are at global scope to decide var type
+	SymTabEntry *ste = stm.currentScope();
+	if (ste->kind() == SymTabEntry::Kind::GLOBAL_KIND) {
+		$$ = new VariableEntry(string($1),VariableEntry::VarKind::GLOBAL_VAR);
+	} else {
+		$$ = new VariableEntry(string($1),VariableEntry::VarKind::LOCAL_VAR);
+	}
+}
+| TOK_IDENT TOK_ASSIGN expr {
+	prt("VariableDeclWithInit");
+	// check whether we are at global scope to decide var type
+	SymTabEntry *ste = stm.currentScope();
+	if (ste->kind() == SymTabEntry::Kind::GLOBAL_KIND) {
+		$$ = new VariableEntry(string($1),VariableEntry::VarKind::GLOBAL_VAR,nullptr,$3);
+	} else {
+		$$ = new VariableEntry(string($1),VariableEntry::VarKind::LOCAL_VAR,nullptr,$3);
+	}
+}
+;
+
+class_decl: TOK_CLASS TOK_IDENT TOK_SEMICOLON {
+	prt("ClassDecl");
+	$$ = new ClassEntry($2);
+	stm.insert($$);
+
+}
+| TOK_CLASS error TOK_SEMICOLON {
+	errMsg("Syntax error in class declaration: expecting class name");
+}
 ;
 
 event_decl: event_decl_hdr TOK_LPAREN formal_param_list TOK_RPAREN TOK_SEMICOLON {

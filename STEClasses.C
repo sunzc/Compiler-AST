@@ -21,3 +21,11 @@ void VariableEntry::print(ostream& out, int indent) const
 void BlockEntry::print(ostream& os, int indent) const{
 	// Add your code
 }
+
+void ClassEntry::print(ostream& os, int indent) const{
+	// Add your code
+}
+
+void FunctionEntry::print(ostream& os, int indent) const{
+	// Add your code
+}

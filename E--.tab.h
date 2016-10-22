@@ -130,6 +130,7 @@ union YYSTYPE
   EventEntry*        eventEntry;                        
   VariableEntry*     variableEntry;
   FunctionEntry*     functionEntry;
+  vector<VariableEntry*>* varEntryList;
 
   BasePatNode*       patVal;
   PrimitivePatNode*  primPatVal;
@@ -145,7 +146,7 @@ union YYSTYPE
   vector<string>*    paramVal;
   const OpNode::OpInfo*    funIval;
 
-#line 149 "E--_parser.H" /* yacc.c:1909  */
+#line 150 "E--_parser.H" /* yacc.c:1909  */
 };
 
 typedef union YYSTYPE YYSTYPE;
