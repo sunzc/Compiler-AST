@@ -33,5 +33,5 @@ regression_test() {
 }
 
 
-regression_test $1 diff_res errtest
+regression_test $1 diff_res test
 cat diff_res
