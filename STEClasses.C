@@ -6,8 +6,8 @@ void GlobalEntry::print(ostream& out, int indent) const
 {
 	// Add your code
 	const SymTab *st = this->symTab();
-	out << endl;
 	if (st != NULL) {
+		out << endl;
 		auto it = st->begin();
 		while(it != st->end()) {
 			if ((*it)->name().compare("any") == 0) {
@@ -106,15 +106,34 @@ void FunctionEntry::print(ostream& os, int indent) const{
 	os << "(";
 	if (this->symTab() != NULL) {
 		auto it = this->symTab()->begin();
-		for(; it != this->symTab()->end(); ++it) {
+		int p_num = this->type()->arity();
+		int i = 0;
+		for(; (it != this->symTab()->end()) && (i < p_num); ++it, ++i) {
 			(*it)->print(os, 0);
 			if ((*it)->next() != NULL)
 				os<<", ";
 		}
 	}
 	os << ")";
-	if (this->body() != NULL)
-		this->body()->print(os, indent);
+	if (this->body() != NULL) {
+		os << "{"<<endl;
+		auto it = this->symTab()->begin();
+		int p_num = this->type()->arity();
+		int i = 0;
+		// skip formal parameters
+		for (; i < p_num; ++i, ++it){}
+		// print var decl in function
+		for(; (it != this->symTab()->end()); ++it) {
+			prtSpace(os, indent + 2);
+			(*it)->print(os, indent + 2);
+			os << ";" << endl;
+		}
+
+		this->body()->printWithoutBraces(os, indent + 2);
+
+		prtSpace(os, indent);
+		os << "}";
+	}
 	os << ";";
 	os <<endl;
 }

@@ -221,9 +221,11 @@ void PrimitivePatNode::print(ostream& os, int indent) const{
 		os << "(";
 		if (this->params() != NULL) {
 			auto it = this->params()->begin();
-			for(;it != this->params()->end(); ++it) {
+			int i, size;
+			size = this->params()->size();
+			for(i = 0;it != this->params()->end(); ++it, ++i) {
 				(*it)->print(os, 0);
-				if ((*it)->next() != NULL)
+				if (i < size - 1)
 					os<<", ";
 			}
 		}
@@ -231,7 +233,7 @@ void PrimitivePatNode::print(ostream& os, int indent) const{
 	}
 
 	if (this->cond() != NULL) {
-		os << " | ";
+		os << "|";
 		this->cond()->print(os, indent);
 	}
 
@@ -385,15 +387,15 @@ void IfNode::print(ostream& os, int indent) const{
 	os << "(";
 	this->cond()->print(os, indent);
 	os << ")";
-	if (this->thenStmt()->stmtNodeKind() != StmtNode::StmtNodeKind::COMPOUND) {
-		os << endl;
+	if ((this->thenStmt()->stmtNodeKind() != StmtNode::StmtNodeKind::COMPOUND)) { 
 		prtSpace(os, indent + 2);
 		this->thenStmt()->print(os, indent + 2);
-		if (this->thenStmt()->stmtNodeKind() != StmtNode::StmtNodeKind::IF) {
-			os << ";";
-			os << endl;
-		}
+		os << ";";
+		os << endl;
 	} else {
+		
+		(this->thenStmt())->print(os, indent + 2);
+/*
 		os << step;
 		os << "{";
 		os << endl; 
@@ -401,6 +403,20 @@ void IfNode::print(ostream& os, int indent) const{
 		prtSpace(os, indent);
 		os << "}";
 		os << endl; 
+*/	}
+
+	if (this->elseStmt() != NULL) {
+		prtSpace(os, indent);
+		os << "else "; 
+
+		if ((this->elseStmt()->stmtNodeKind() != StmtNode::StmtNodeKind::COMPOUND)){
+			prtSpace(os, indent + 2);
+			this->elseStmt()->print(os, indent + 2);
+			os << ";";
+			os << endl;
+		} else {
+			(this->elseStmt())->print(os, indent + 2);
+		}
 	}
 }
 
@@ -445,7 +461,7 @@ void  CompoundStmtNode::print(ostream& os, int indent) const{
 		os << "{" << endl;
 		auto it = this->stmts()->begin();
 		for (; it != this->stmts()->end(); ++it) {
-			if (((*it)->stmtNodeKind() != StmtNode::StmtNodeKind::COMPOUND) ||
+			if (((*it)->stmtNodeKind() != StmtNode::StmtNodeKind::COMPOUND) && 
 				((*it)->stmtNodeKind() != StmtNode::StmtNodeKind::IF)) {
 				prtSpace(os, indent + 2);
 				(*it)->print(os, indent + 2);
@@ -456,6 +472,7 @@ void  CompoundStmtNode::print(ostream& os, int indent) const{
 		prtSpace(os, indent);
 		os << "};" << endl;
 	} else {
+		prtSpace(os, indent);
 		os << "{};" << endl;
 	}
 }

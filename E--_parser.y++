@@ -90,7 +90,7 @@ extern const OpNode::OpInfo opInfo[];
 %type <ifVal>  if_then_else_stmt 
 %type <stmtList> stmt_plus
 %type <stmtVal> stmt
-%type <compoundStmtVal> compoundStmt fun_rest
+%type <compoundStmtVal> compoundStmt fun_rest compoundStmtWithoutSemicolon
 %type <classEntry> class_decl
 
 /* Uncomment types below as you start adding rules.
@@ -198,8 +198,8 @@ function_decl: function_header TOK_LPAREN formal_param_list TOK_RPAREN TOK_SEMIC
 	$1->type(ft);
 
 	// copy formal parameters to event_entry
-	int p_num = ft->arity();
 	SymTabEntry *ste = stm.currentScope();
+	int p_num = ste->symTab()->size();
 	if (ste->symTab() != NULL) {
 		auto it = ste->symTab()->begin();
 		for(; p_num > 0; ++it,p_num--) {
@@ -224,8 +224,8 @@ function_decl: function_header TOK_LPAREN formal_param_list TOK_RPAREN TOK_SEMIC
 	$1->body($5);
 
 	// copy formal parameters to event_entry
-	int p_num = ft->arity();
 	SymTabEntry *ste = stm.currentScope();
+	int p_num = ste->symTab()->size();
 	if (ste->symTab() != NULL) {
 		auto it = ste->symTab()->begin();
 		for(;p_num > 0;++it,p_num--) {
@@ -249,8 +249,8 @@ function_decl: function_header TOK_LPAREN formal_param_list TOK_RPAREN TOK_SEMIC
 	$1->body($5);
 
 	// copy formal parameters to event_entry
-	int p_num = ft->arity();
 	SymTabEntry *ste = stm.currentScope();
+	int p_num = ste->symTab()->size();
 	if (ste->symTab() != NULL) {
 		auto it = ste->symTab()->begin();
 		for(; p_num > 0; ++it,p_num--) {
@@ -438,14 +438,18 @@ formal_param_plus: type TOK_IDENT {
 	auto it = $1->end();
 	$1->insert(it, $3);
 	$$ = $1;
-}
+	}
 ;
 
 /* TODO: type name will conflict with assignment statement */
 type: TOK_IDENT {
 	//prt("Type");
 	// construct type and assign
-	$$ = new Type(Type::TypeTag::UNKNOWN);
+	// lookup this type, whether it's class
+	SymTabEntry *ste = stm.lookUpInScope(string($1), SymTabEntry::Kind::GLOBAL_KIND);
+	if ((ste != NULL) && (ste->kind() == SymTabEntry::Kind::CLASS_KIND)) {
+		$$ = new Type(ste, Type::TypeTag::CLASS);
+	}
 }
 | baseType {
 	//prt("Type");
@@ -487,7 +491,7 @@ baseType: TOK_VOID {
 ;
 
 rule_star: /* empty */ {
-	errMsg("Must contain at least one rule");
+	//errMsg("Must contain at least one rule");
 }
 | rule_list {
 }
@@ -892,6 +896,9 @@ stmt: TOK_SEMICOLON {
 | compoundStmt {
 	$$ = $1;
 } 
+| compoundStmtWithoutSemicolon{
+	$$ = $1;
+}
 | error TOK_SEMICOLON{
 	errMsg("Syntax error while parsing a statement");
 }
@@ -917,6 +924,12 @@ lp_expr_rp: TOK_LPAREN expr TOK_RPAREN {
 ;
 
 compoundStmt: TOK_LBRACE stmt_plus TOK_RBRACE TOK_SEMICOLON{
+	//prt("CompoundStmt");
+	$$ = new CompoundStmtNode($2);
+}
+;
+
+compoundStmtWithoutSemicolon: TOK_LBRACE stmt_plus TOK_RBRACE{
 	//prt("CompoundStmt");
 	$$ = new CompoundStmtNode($2);
 }
