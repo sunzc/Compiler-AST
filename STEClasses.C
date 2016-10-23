@@ -51,16 +51,16 @@ void EventEntry::print(ostream& out, int indent) const
 	out << "event";
 	out << step;
 	out << this->name();
-	out << "(";
 	if (this->symTab() != NULL) {
+		out << "(";
 		auto it = this->symTab()->begin();
 		for(; it != this->symTab()->end(); ++it) {
 			(*it)->print(out, 0);
 			if ((*it)->next() != NULL)
 				out<<", ";
 		}
+		out << ")";
 	}
-	out << ")";
 	out << ";";
 	out <<endl;
 }
@@ -110,7 +110,7 @@ void FunctionEntry::print(ostream& os, int indent) const{
 		int i = 0;
 		for(; (it != this->symTab()->end()) && (i < p_num); ++it, ++i) {
 			(*it)->print(os, 0);
-			if ((*it)->next() != NULL)
+			if (i < p_num - 1)
 				os<<", ";
 		}
 	}

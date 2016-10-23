@@ -168,13 +168,13 @@ ifc_decl_star: /* empty */ {}
 
 ifc_decl: TOK_SEMICOLON {}
 | event_decl {
-	//$1->print(cout, 0);
+//	$1->print(cout, 0);
 }
 | class_decl {
-	//$1->print(cout, 0);
+//	$1->print(cout, 0);
 }
 | variable_decl {
-//	prt("ifc_decl:var_decl -");
+	//prt("ifc_decl:var_decl -");
 //	if ($1->size() > 0) {
 //		auto it = $1->begin();
 //		for (; it != $1->end(); ++it) {
@@ -182,7 +182,7 @@ ifc_decl: TOK_SEMICOLON {}
 //			cout<<";"<<endl;
 //		}
 //	}
-//	prt("ifc_decl:var_decl +");
+	//prt("ifc_decl:var_decl +");
 }
 | function_decl {
 //	$1->print(cout, 0);
@@ -275,6 +275,12 @@ function_header: type TOK_IDENT {
 	// enter scope, TODO what argument should we pass to it?
 	SymTabEntry *ste = new SymTabEntry(string("FUNCTION"), SymTabEntry::Kind::FUNCTION_KIND, 0, 0, "");
 	stm.enterScope(ste);
+
+	ste = stm.lookUp(string($2));
+	if (ste != NULL) {
+		errMsg(string("Redefinition of name \"")+ string($2) + string("\""));
+	}
+
 } /* function without a body */
 | type error TOK_RPAREN{
 	errMsg("Expecting a function declaration -- may be a missing function name");
@@ -317,7 +323,7 @@ var_list: var_name {
 	auto it = $$->end();
 
 	$$->insert(it, $1);
-	//prt("VariableList +");
+	////prt("VariableList +");
 }
 | var_list TOK_COMMA var_name {
 	auto it = $1->end();
@@ -336,7 +342,12 @@ var_name: TOK_IDENT {
 	} else {
 		$$ = new VariableEntry(string($1),VariableEntry::VarKind::LOCAL_VAR);
 	}
-	//prt("VariableDeclWithoutInit +");
+
+	ste = stm.lookUpInScope(string($1), ste->kind());
+	if (ste != NULL) {
+		errMsg(string("Redefinition of name \"")+ string($1) + string("\""));
+	}
+	////prt("VariableDeclWithoutInit +");
 }
 | TOK_IDENT TOK_ASSIGN expr {
 	//prt("VariableDeclWithInit -");
@@ -349,12 +360,22 @@ var_name: TOK_IDENT {
 		$$ = new VariableEntry(string($1),VariableEntry::VarKind::LOCAL_VAR);
 		$$->initVal($3);
 	}
-	//prt("VariableDeclWithInit +");
+
+	ste = stm.lookUpInScope(string($1), ste->kind());
+	if (ste != NULL) {
+		errMsg(string("Redefinition of name \"")+ string($1) + string("\""));
+	}
+	////prt("VariableDeclWithInit +");
 }
 ;
 
 class_decl: TOK_CLASS TOK_IDENT TOK_SEMICOLON {
 	//prt("ClassDecl");
+	SymTabEntry *ste = stm.lookUp(string($2));
+	if (ste != NULL) {
+		errMsg(string("Redefinition of name \"")+ string($2) + string("\""));
+	}
+
 	$$ = new ClassEntry($2);
 	stm.insert($$);
 
@@ -397,9 +418,14 @@ event_decl: event_decl_hdr TOK_LPAREN formal_param_list TOK_RPAREN TOK_SEMICOLON
 event_decl_hdr: TOK_EVENT TOK_IDENT {
 	//prt("EventDecl head");
 	// create event
+	SymTabEntry *ste = stm.lookUp(string($2));
+	if (ste != NULL) {
+		errMsg(string("Redefinition of name \"")+ string($2) + string("\""));
+	}
+
 	$$ = new EventEntry(string($2));
 	// enter scope, TODO what argument should we pass to it?
-	SymTabEntry *ste = new SymTabEntry(string("EVENT"), SymTabEntry::Kind::EVENT_KIND, 0, 0, "");
+	ste = new SymTabEntry(string("EVENT"), SymTabEntry::Kind::EVENT_KIND, 0, 0, "");
 	stm.enterScope(ste);
 }
 ;
@@ -449,6 +475,9 @@ type: TOK_IDENT {
 	SymTabEntry *ste = stm.lookUpInScope(string($1), SymTabEntry::Kind::GLOBAL_KIND);
 	if ((ste != NULL) && (ste->kind() == SymTabEntry::Kind::CLASS_KIND)) {
 		$$ = new Type(ste, Type::TypeTag::CLASS);
+	} else {
+		errMsg(string("Undeclared type \"") + string($1) + string("\""));
+		$$ = 0;
 	}
 }
 | baseType {
@@ -463,8 +492,9 @@ type: TOK_IDENT {
 	if ($2->isInt($2->tag())) {
 		$$ = new Type(Type::TypeTag::UINT);
 	}else{
-		errMsg("Unsupport type!\n");
-		$$ = new Type(Type::TypeTag::UNKNOWN);
+		errMsg("Invalid use of keyword \"unsigned\"");
+		//$$ = new Type(Type::TypeTag::UNKNOWN);
+		$$ = 0;
 	}
 }
 ;
@@ -548,76 +578,44 @@ rule_body1: event_pattern {
 
 event_pattern: event{
 	// construct PrimitivePatNode without expr
-
-	// to decide when to enter the rule scope, we should find the first event in the rule
-	// to find the first rule, we should check whether we are at global scope when we see the event
-	SymTabEntry *ste = stm.currentScope();
-	vector<VariableEntry *> *ve_list;
-	std::vector<VariableEntry *>::iterator it;
-	if (ste->kind() == SymTabEntry::Kind::GLOBAL_KIND) {
-		// we enter scope and add the variable entry in event param_list into the new scope
-		SymTabEntry *scope_ste = new SymTabEntry(string("RULE"), SymTabEntry::Kind::RULE_KIND, 0, 0, "");
-		stm.enterScope(scope_ste);
-		if ($1->params() != NULL) {
-			ve_list = $1->params();
-			for(it = ve_list->begin(); it != ve_list->end(); it++) {
-				stm.insert(*it);
-			}
-		}
-	} else {
-		// seems we have already entered the rule scope, so just add variable entry in the event param_list into the new scope
-		if ($1->params() != NULL) {
-			ve_list = $1->params();
-			for(it = ve_list->begin(); it != ve_list->end(); it++) {
-				stm.insert(*it);
-			}
-		}
-	}
+	//prt("event");
 
 	$$ = (BasePatNode *)$1;
 }
 | primitive_pat {
-	// to decide when to enter the rule scope, we should find the first event in the rule
-	// to find the first rule, we should check whether we are at global scope when we see the event
-	SymTabEntry *ste = stm.currentScope();
-	vector<VariableEntry *> *ve_list;
-	std::vector<VariableEntry *>::iterator it;
-	if (ste->kind() == SymTabEntry::Kind::GLOBAL_KIND) {
-		// we enter scope and add the variable entry in event param_list into the new scope
-		SymTabEntry *scope_ste = new SymTabEntry(string("RULE"), SymTabEntry::Kind::RULE_KIND, 0, 0, "");
-		stm.enterScope(scope_ste);
-		ve_list = $1->params();
-		for(it = ve_list->begin(); it != ve_list->end(); it++) {
-			stm.insert(*it);
-		}
-	} else {
-		// seems we have already entered the rule scope, so just add variable entry in the event param_list into the new scope
-		ve_list = $1->params();
-		for(it = ve_list->begin(); it != ve_list->end(); it++) {
-			stm.insert(*it);
-		}
-	}
-
+	//prt("PrimitivePat");
 	$$ = (BasePatNode *)$1;
 }
 | event_pattern TOK_PAT_OR event_pattern {
+	//prt("EventPat \\/ EventPat");
 	$$ = (BasePatNode *)(new PatNode(BasePatNode::PatNodeKind::OR, $1, $3));
 }
 | event_pattern TOK_COLON event_pattern {
+	//prt("EventPat : EventPat");
 	$$ = (BasePatNode *)(new PatNode(BasePatNode::PatNodeKind::SEQ, $1, $3));
 }
 | event_pattern TOK_PAT_STAR {
+	//prt("EventPat **");
 	$$ = (BasePatNode *)(new PatNode(BasePatNode::PatNodeKind::STAR, $1));
 }
 | TOK_NOT event_pattern %prec TOK_PAT_NOT {
-	$$ = (BasePatNode *)(new PatNode(BasePatNode::PatNodeKind::NEG, $2));
+	//prt("!EventPat");
+
+	if ($2->kind() != BasePatNode::PatNodeKind::PRIMITIVE) {
+		errMsg("Only simple patterns without `.', `*', and `!' operatorscan be negated");
+	} else {
+		$$ = (BasePatNode *)(new PatNode(BasePatNode::PatNodeKind::NEG, $2));
+	}
+
 }
 | TOK_LPAREN event_pattern TOK_RPAREN {
+	//prt("(EventPat)");
 	$$ = $2;
 }
 ;
 
 primitive_pat: event TOK_BITOR expr {
+	//prt("PrimitivePatWithCond");
 	$1->cond($3);
 	$$ = $1;
 }
@@ -625,52 +623,76 @@ primitive_pat: event TOK_BITOR expr {
 
 event: TOK_ANY {
 	// for 'any' event, we don't need to lookup global scope for its definition
+	//prt("anyEvent");
 	EventEntry *ee = new EventEntry(string("any"));
 	$$ = new PrimitivePatNode(ee, nullptr);
+
+	SymTabEntry *ste = stm.currentScope();
+	if (ste->kind() == SymTabEntry::Kind::GLOBAL_KIND) {
+		SymTabEntry *scope_ste = new SymTabEntry(string("RULE"), SymTabEntry::Kind::RULE_KIND, 0, 0, "");
+		stm.enterScope(scope_ste);
+	}
 }
 | TOK_IDENT TOK_LPAREN param_list TOK_RPAREN {
+	//prt("NormalEvent");
+	//cout<<endl<<$1<<endl;
+	//prt("NormalEvent1");
+	SymTabEntry *ste = stm.currentScope();
+	if (ste->kind() == SymTabEntry::Kind::GLOBAL_KIND) {
+		SymTabEntry *scope_ste = new SymTabEntry(string("RULE"), SymTabEntry::Kind::RULE_KIND, 0, 0, "");
+		stm.enterScope(scope_ste);
+	}
+
+	//prt("NormalEvent2");
 	// look up this event name in global scope, check whether it has been defined
-	SymTabEntry *ste = stm.lookUpInScope(string($1), SymTabEntry::Kind::GLOBAL_KIND);
-	vector<VariableEntry*> *ve_list = new vector<VariableEntry*> ();
-	std::vector<VariableEntry*>::iterator it_vel;
+	ste = stm.lookUpInScope(string($1), SymTabEntry::Kind::GLOBAL_KIND);
+	vector<VariableEntry*> *ve_list = new vector<VariableEntry*> (); std::vector<VariableEntry*>::iterator it_vel;
 	VariableEntry *ve;
 	Type *t;
 	vector<Type*> * argTypes;
 	vector<string> * param_list = $3;
 	bool ok = false;
 
+	//prt("NormalEvent21");
 	if (ste == NULL) {
-		// TODO handle name undefined error here!
-		errMsg("ERROR: undefined event!");
+		errMsg(string("Expected an event name, but got \"")+string($1)+string("\""));
 	} else {
 		t = ste->type();
 		if (t->tag() != Type::TypeTag::EVENT) {
-			// TODO handle name not match error here!
-			errMsg("ERROR: name not match, expect an event definition!");
+			errMsg(string("Expected an event name, but got \"")+string($1)+string("\""));
 		} else {
 			// construct
+			////prt("NormalEvent22");
 			argTypes = t->argTypes();
-			if (argTypes->size() != param_list->size()) {
-				// TODO handle parameters not match error here!
-				errMsg("ERROR: parameters length not match!");
-			} else {
+			if (argTypes == NULL ) {
+				ok = true;
+			}
+			else if (argTypes->size() != param_list->size()) {
+				errMsg(string($1) + string(": mismatch in the number of arguments"));
+			} else if (argTypes->size() > 0){
+				//cout<<"argT_size:"<<argTypes->size()<<" param_list_size:"<<param_list->size()<<endl;
 				// construct variable entry from param_list, combined with the type info from event
 				std::vector<string>::iterator it_s = param_list->begin();
+				//prt("NormalEvent23");
 				for(std::vector<Type*>::iterator it = argTypes->begin(); it != argTypes->end(); it++, it_s++) {
 					ve = new VariableEntry(*it_s, VariableEntry::VarKind::PARAM_VAR, *it);
 					it_vel = ve_list->end();
 					ve_list->insert(it_vel, ve);
+					stm.insert(ve);
 				}
+				////prt("NormalEvent24");
 				ok = true;
 			}
 		}
 	}
 
+	////prt("NormalEvent3");
 	if (ok) {
 		$$ = new PrimitivePatNode((EventEntry *)ste, ve_list);
 	} else {
 		$$ = nullptr;
 	}
+	//prt("NormalEvent4");
 }
 ;
 
@@ -761,15 +783,14 @@ ref_expr: TOK_IDENT {
 	// while current scope maybe function scope, rule scope.
 	SymTabEntry *ste = stm.lookUp(string($1));
 	if (ste == NULL) {
-		// TODO handle name not defined error!
-		errMsg("ERROR: var name not defined!");
+		errMsg(string("Undeclared identifier \"") + string($1) + string("\""));
 	} else
 		$$ = new RefExprNode(string($1), ste);
 }
 ;
 
 asg_stmt: ref_expr TOK_ASSIGN expr {
-	//prt("Assignment");
+	////prt("Assignment");
 	$$ = new OpNode(OpNode::OpCode::ASSIGN, $1, $3);
 }
 | ref_expr TOK_ASSIGN error TOK_SEMICOLON {
@@ -779,13 +800,12 @@ asg_stmt: ref_expr TOK_ASSIGN expr {
 ;
 
 function_invocation: TOK_IDENT TOK_LPAREN expr_list TOK_RPAREN {
-	//prt("FunctionInvocation");
+	////prt("FunctionInvocation");
 	// check whether function name has been defined or not, only check GlobalScope
 	SymTabEntry *ste = stm.lookUpInScope(string($1), SymTabEntry::Kind::GLOBAL_KIND);
-	if (ste == NULL) {
+	if (ste == NULL || ste->kind() != SymTabEntry::Kind::FUNCTION_KIND) {
 		// TODO handle name not defined error!
-		errMsg("ERROR: function name not defined!");
-		cout<<"function name: "<< $1<<endl;
+		errMsg(string("\"")+string($1) +string("\" ")+ string("is not a function name or module name"));
 	} else
 		$$ = new InvocationNode(ste, $3);
 }
@@ -844,7 +864,7 @@ param_plus: TOK_IDENT {
 	$$->insert(it, string($1));
 } /* TODO not sure whether empty param is allowed or not in event */ 
 | param_plus TOK_COMMA TOK_IDENT {
-	//prt("EventFormalParam");
+	////prt("EventFormalParam");
 	auto it = $1->end();
 	$1->insert(it, string($3));
 
@@ -884,7 +904,7 @@ stmt: TOK_SEMICOLON {
 		$$ = new ReturnStmtNode($2, nullptr);
 	} else {
 		// TODO handle ret not in function scope error!
-		errMsg("ERROR: ret not in function scope!");
+		errMsg("Return statement is valid only within a function");
 	}
 }
 | function_invocation TOK_SEMICOLON {
@@ -909,7 +929,7 @@ if_then_else_stmt: TOK_IF lp_expr_rp stmt { /* TODO : first conflict */
 	$$ = new IfNode($2, $3);
 }
 | TOK_IF lp_expr_rp stmt TOK_ELSE stmt {
-	//prt("IfThenElseStmt");
+	////prt("IfThenElseStmt");
 	$$ = new IfNode($2, $3, $5);
 }
 | TOK_IF lp_expr_rp stmt TOK_ELSE error{
@@ -924,7 +944,7 @@ lp_expr_rp: TOK_LPAREN expr TOK_RPAREN {
 ;
 
 compoundStmt: TOK_LBRACE stmt_plus TOK_RBRACE TOK_SEMICOLON{
-	//prt("CompoundStmt");
+	////prt("CompoundStmt");
 	$$ = new CompoundStmtNode($2);
 }
 ;

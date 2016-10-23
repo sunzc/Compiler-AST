@@ -18,9 +18,9 @@ diff_demo_and_out() {
 # arg2: output filename, like diff_res
 regression_test() {
 	echo "" > $2
-	for x in `ls test/in0*`
+	for x in `ls $3/in0*`
 	do
-		if [ "$x" != "test/$1" ]
+		if [ "$x" != "$3/$1" ]
 		then
 			#echo "diff_demo_and_out $x $2 "
 			diff_demo_and_out $x $2 
@@ -33,5 +33,5 @@ regression_test() {
 }
 
 
-regression_test $1 diff_res
+regression_test $1 diff_res errtest
 cat diff_res
