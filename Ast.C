@@ -5,10 +5,12 @@
 AstNode::AstNode(NodeType nt, int line, int column, string file):
   ProgramElem(NULL, line, column, file) {
 	// Add your code here
+	nodeType_ = nt;
 }
 
 AstNode::AstNode(const AstNode& ast): ProgramElem(ast) {
 	// Add your code here
+	nodeType_ = ast.nodeType();
 }
 
 /****************************************************************/
@@ -18,12 +20,16 @@ ExprNode::ExprNode(ExprNodeType et, const Value* val, int line, int column,
 	AstNode(AstNode::NodeType::EXPR_NODE, line, column, file)
 {
 	// Add your code here
+	exprType_ = et;
+	val_ = val;
 }
 
 
 ExprNode::ExprNode(const ExprNode& e) : AstNode(e)
 {
 	// Add your code here
+	exprType_ = e.exprNodeType();
+	val_ = e.value();
 }
 /****************************************************************/
 extern const OpNode::OpInfo opInfo[] = {
@@ -211,7 +217,8 @@ void PrimitivePatNode::print(ostream& os, int indent) const{
 	// Add your code
 	os << "(";
 	cout << this->event()->name();
-	os << "(";
+	if (this->event()->name().compare("any") != 0) {
+		os << "(";
 		if (this->params() != NULL) {
 			auto it = this->params()->begin();
 			for(;it != this->params()->end(); ++it) {
@@ -220,7 +227,8 @@ void PrimitivePatNode::print(ostream& os, int indent) const{
 					os<<", ";
 			}
 		}
-	os << ")";
+		os << ")";
+	}
 
 	if (this->cond() != NULL) {
 		os << " | ";
@@ -324,9 +332,7 @@ RefExprNode::RefExprNode(string ext, const SymTabEntry* ste,
 
 void RefExprNode::print(ostream& os, int indent) const{
 	// Add your code
-	os << "(";
 	os << this->ext();
-	os << ")";
 }
 
 // TODO don't know what kind of copy here it is, should we copy ext_???
@@ -410,7 +416,7 @@ void RuleNode::print(ostream& os, int indent) const{
 	// Add your code
 	prtSpace(os, indent);
 	this->pat()->print(os, indent);
-	os << "-> ";
+	os << "-->";
 	this->reaction()->print(os, indent);
 	prtSpace(os, indent);
 	os << ";;" << endl;
